@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
@@ -25,6 +27,7 @@ type Agent struct {
 	client         *anthropic.Client
 	getUserMessage func() (string, bool)
 	tools          []ToolDefinition
+	interactive    bool
 }
 
 // ToolDefinition struct defines a tool that the agent can use.
@@ -40,11 +43,13 @@ func NewAgent(
 	client *anthropic.Client,
 	getUserMessage func() (string, bool),
 	tools []ToolDefinition,
+	interactive bool,
 ) *Agent {
 	return &Agent{
 		client:         client,
 		getUserMessage: getUserMessage,
 		tools:          tools,
+		interactive:    interactive,
 	}
 }
 
@@ -52,15 +57,20 @@ func NewAgent(
 // It continuously prompts the user for input, sends it to the Anthropic API,
 // and processes the model's response, which may include text or tool use requests.
 // The loop terminates when the user signals the end of input (e.g., by pressing CTRL+C).
-func (a *Agent) Run(ctx context.Context) error {
+// In non-interactive mode, it takes an initial message, gets the model's response, and exits.
+func (a *Agent) Run(ctx context.Context, initialMessage string) error {
 	conversation := []anthropic.MessageParam{}
 
-	fmt.Printf("Chat with Tiny Trae (use CTRL+C to exit)\n")
+	if initialMessage != "" {
+		userMessage := anthropic.NewUserMessage(anthropic.NewTextBlock(initialMessage))
+		conversation = append(conversation, userMessage)
+	} else {
+		fmt.Printf("Chat with Tiny Trae (use CTRL+C to exit)\n")
+	}
 
-	readUserInput := true
+	readUserInput := initialMessage == ""
 	for {
 		if readUserInput {
-			fmt.Print("You: ")
 			userInput, ok := a.getUserMessage()
 			if !ok {
 				break
@@ -76,11 +86,23 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 		conversation = append(conversation, message.ToParam())
 
+		hasToolUse := false
+		for _, content := range message.Content {
+			if content.Type == "tool_use" {
+				hasToolUse = true
+				break
+			}
+		}
+
 		toolResults := []anthropic.ContentBlockParamUnion{}
 		for _, content := range message.Content {
 			switch content.Type {
 			case "text":
-				fmt.Printf("Claude: %s\n", content.Text)
+				if a.interactive {
+					fmt.Printf("Trae: %s\n", content.Text)
+				} else if !hasToolUse {
+					fmt.Printf("%s\n", content.Text)
+				}
 			case "tool_use":
 				result := a.executeTool(content.ID, content.Name, content.Input)
 				toolResults = append(toolResults, result)
@@ -88,6 +110,9 @@ func (a *Agent) Run(ctx context.Context) error {
 		}
 
 		if len(toolResults) == 0 {
+			if !a.interactive {
+				return nil
+			}
 			readUserInput = true
 			continue
 		}
@@ -143,7 +168,10 @@ func (a *Agent) executeTool(id, name string, input json.RawMessage) anthropic.Co
 		return anthropic.NewToolResultBlock(id, "tool not found", true)
 	}
 
-	fmt.Printf("Tool: %s(%s)\n", name, input)
+	if a.interactive {
+		fmt.Printf("Tool: %s(%s)\n", name, input)
+	}
+
 	response, err := toolDef.Function(input)
 	if err != nil {
 		return anthropic.NewToolResultBlock(id, err.Error(), true)
@@ -436,8 +464,17 @@ func Bash(input json.RawMessage) (string, error) {
 // main is the entry point of the application.
 // It initializes the Anthropic client, sets up the available tools,
 // creates a new agent, and starts its execution.
+// It supports both interactive and non-interactive modes.
 // Any errors that occur during the agent's run are printed to the console.
 func main() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		fmt.Println()
+		os.Exit(0)
+	}()
+
 	var options []option.RequestOption
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
 		options = append(options, option.WithAPIKey(apiKey))
@@ -447,12 +484,26 @@ func main() {
 	}
 	client := anthropic.NewClient(options...)
 
-	scanner := bufio.NewScanner(os.Stdin)
-	getUserMessage := func() (string, bool) {
-		if !scanner.Scan() {
+	prompt := flag.String("p", "", "Accept a string as user input")
+	flag.Parse()
+
+	var getUserMessage func() (string, bool)
+	var initialMessage string
+
+	if *prompt != "" {
+		initialMessage = *prompt
+		getUserMessage = func() (string, bool) {
 			return "", false
 		}
-		return scanner.Text(), true
+	} else {
+		scanner := bufio.NewScanner(os.Stdin)
+		getUserMessage = func() (string, bool) {
+			fmt.Print("You: ")
+			if !scanner.Scan() {
+				return "", false
+			}
+			return scanner.Text(), true
+		}
 	}
 
 	tools := []ToolDefinition{
@@ -462,8 +513,8 @@ func main() {
 		RipgrepDefinition,
 		BashDefinition,
 	}
-	agent := NewAgent(&client, getUserMessage, tools)
-	err := agent.Run(context.TODO())
+	agent := NewAgent(&client, getUserMessage, tools, *prompt == "")
+	err := agent.Run(context.TODO(), initialMessage)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
 	}

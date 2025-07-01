@@ -5,6 +5,7 @@ This project is a simple AI coding agent implemented in Go. It uses the Anthropi
 ## Features
 
 - **Interactive Chat:** Chat with the agent from your terminal.
+- **Non-interactive mode:** Provide input directly from the command line.
 - **Tool Execution:** The agent can execute the following tools:
     - `read_file`: Read the contents of a file.
     - `list_files`: List files and directories.
@@ -45,8 +46,29 @@ This project is a simple AI coding agent implemented in Go. It uses the Anthropi
     or
     ```bash
     go build -o tiny-trae
-    ./tiny-trae
     ```
+
+## Usage
+
+### Interactive Mode
+
+To run the agent in interactive mode, simply run the executable:
+
+```bash
+./tiny-trae
+```
+
+The agent will prompt you for input.
+
+### Non-interactive Mode
+
+To run the agent in non-interactive mode, use the `-p` flag to provide a prompt:
+
+```bash
+./tiny-trae -p "your prompt here"
+```
+
+The agent will process the prompt and exit.
 
 ## Using with OpenRouter
 
