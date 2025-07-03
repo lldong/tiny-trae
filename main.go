@@ -9,8 +9,7 @@ import (
 	"os/signal"
 
 	"tiny-trae/internal/agent"
-	"tiny-trae/internal/prompt"
-	"tiny-trae/internal/tools"
+	"tiny-trae/internal/profile"
 
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
@@ -29,6 +28,18 @@ func main() {
 		os.Exit(0)
 	}()
 
+	// Define command line flags
+	promptFlag := flag.String("p", "", "Accept a string as user input")
+	listProfilesFlag := flag.Bool("list-profiles", false, "List all available profiles")
+	profileFlag := flag.String("profile", "default", "Specify which profile to use (default, coding, minimal)")
+	flag.Parse()
+
+	// Handle list profiles flag
+	if *listProfilesFlag {
+		profile.ListProfiles()
+		return
+	}
+
 	var options []option.RequestOption
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
 		options = append(options, option.WithAPIKey(apiKey))
@@ -37,9 +48,6 @@ func main() {
 		options = append(options, option.WithBaseURL(baseURL))
 	}
 	client := agent.NewClientWithOptions(options...)
-
-	promptFlag := flag.String("p", "", "Accept a string as user input")
-	flag.Parse()
 
 	var getUserMessage func() (string, bool)
 	var initialMessage string
@@ -60,9 +68,15 @@ func main() {
 		}
 	}
 
-	allTools := tools.GetAllTools()
-	systemPrompt := prompt.GetSystemPrompt()
-	agentInstance := agent.NewAgent(client, getUserMessage, allTools, *promptFlag == "", systemPrompt)
+	// Select profile based on command line flag
+	agentProfile := profile.GetProfileByName(*profileFlag)
+	if agentProfile == nil {
+		fmt.Printf("Error: Unknown profile '%s'. Use --list-profiles to see available profiles.\n", *profileFlag)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Using profile: %s\n", agentProfile.Name)
+	agentInstance := agent.NewAgent(client, getUserMessage, agentProfile, *promptFlag == "")
 	err := agentInstance.Run(context.TODO(), initialMessage)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())

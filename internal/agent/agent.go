@@ -18,30 +18,55 @@ type ToolDefinition struct {
 	Function    func(input json.RawMessage) (string, error)
 }
 
+// Profile represents a configuration that combines model settings, tools, and system prompt.
+type Profile struct {
+	Name         string
+	Model        anthropic.Model
+	MaxTokens    int64
+	Tools        []ToolDefinition
+	SystemPrompt string
+}
+
 // Agent struct represents the core of the AI agent.
 type Agent struct {
 	client         anthropic.Client
 	getUserMessage func() (string, bool)
-	tools          []ToolDefinition
+	profile        *Profile
 	interactive    bool
-	systemPrompt   string
 }
 
-// NewAgent creates a new Agent instance.
+// NewAgent creates a new Agent instance with a profile.
 func NewAgent(
+	client anthropic.Client,
+	getUserMessage func() (string, bool),
+	profile *Profile,
+	interactive bool,
+) *Agent {
+	return &Agent{
+		client:         client,
+		getUserMessage: getUserMessage,
+		profile:        profile,
+		interactive:    interactive,
+	}
+}
+
+// NewAgentWithDefaults creates a new Agent instance with individual parameters (legacy).
+// Deprecated: Use NewAgent with a Profile instead.
+func NewAgentWithDefaults(
 	client anthropic.Client,
 	getUserMessage func() (string, bool),
 	tools []ToolDefinition,
 	interactive bool,
 	systemPrompt string,
 ) *Agent {
-	return &Agent{
-		client:         client,
-		getUserMessage: getUserMessage,
-		tools:          tools,
-		interactive:    interactive,
-		systemPrompt:   systemPrompt,
+	profile := &Profile{
+		Name:         "legacy",
+		Model:        anthropic.ModelClaudeSonnet4_0,
+		MaxTokens:    1024,
+		Tools:        tools,
+		SystemPrompt: systemPrompt,
 	}
+	return NewAgent(client, getUserMessage, profile, interactive)
 }
 
 // NewClientWithOptions creates a new Anthropic client with the given options.
@@ -125,7 +150,7 @@ func (a *Agent) Run(ctx context.Context, initialMessage string) error {
 // The function returns the model's response message or an error if the API call fails.
 func (a *Agent) runInference(ctx context.Context, conversation []anthropic.MessageParam) (*anthropic.Message, error) {
 	anthropicTools := []anthropic.ToolUnionParam{}
-	for _, tool := range a.tools {
+	for _, tool := range a.profile.Tools {
 		anthropicTools = append(anthropicTools, anthropic.ToolUnionParam{
 			OfTool: &anthropic.ToolParam{
 				Name:        tool.Name,
@@ -136,11 +161,11 @@ func (a *Agent) runInference(ctx context.Context, conversation []anthropic.Messa
 	}
 
 	message, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.ModelClaudeSonnet4_0,
-		MaxTokens: int64(1024),
+		Model:     a.profile.Model,
+		MaxTokens: a.profile.MaxTokens,
 		Messages:  conversation,
 		Tools:     anthropicTools,
-		System:    []anthropic.TextBlockParam{{Text: a.systemPrompt}},
+		System:    []anthropic.TextBlockParam{{Text: a.profile.SystemPrompt}},
 	})
 
 	return message, err
@@ -153,7 +178,7 @@ func (a *Agent) runInference(ctx context.Context, conversation []anthropic.Messa
 func (a *Agent) executeTool(id, name string, input json.RawMessage) anthropic.ContentBlockParamUnion {
 	var toolDef ToolDefinition
 	var found bool
-	for _, tool := range a.tools {
+	for _, tool := range a.profile.Tools {
 		if tool.Name == name {
 			toolDef = tool
 			found = true

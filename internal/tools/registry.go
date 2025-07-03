@@ -12,3 +12,12 @@ func GetAllTools() []agent.ToolDefinition {
 		BashDefinition,
 	}
 }
+
+// GetMinimalTools returns a minimal set of tools for basic tasks.
+func GetMinimalTools() []agent.ToolDefinition {
+	return []agent.ToolDefinition{
+		ReadFileDefinition,
+		ListFilesDefinition,
+		EditFileDefinition,
+	}
+}
