@@ -55,33 +55,33 @@ type inputRequestMsg struct{}
 // Define styles
 var (
 	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205")).
-			MarginLeft(1)
+	Bold(true).
+	Foreground(lipgloss.Color("magenta")).
+	MarginLeft(1)
 
 	userStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("10"))
+	Bold(true).
+	Foreground(lipgloss.Color("green"))
 
 	assistantStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("12"))
+	Bold(true).
+	Foreground(lipgloss.Color("cyan"))
 
 	toolStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("11"))
+	Bold(true).
+	Foreground(lipgloss.Color("yellow"))
 
 	errorStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("9"))
+	Bold(true).
+	Foreground(lipgloss.Color("red"))
 
 	systemStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("8"))
+	Foreground(lipgloss.Color("240"))
 
 	inputStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(0, 1)
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.Color("blue")).
+	Padding(0, 1)
 )
 
 // NewTUIFrontend creates a new TUI frontend
@@ -92,24 +92,30 @@ func NewTUIFrontend(interactive bool) *TUIFrontend {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("magenta"))
 
 	textInput := textinput.New()
 	textInput.Placeholder = "Type your message here..."
 	textInput.CharLimit = 1000
-	textInput.Width = 50
+	textInput.Width = 72 // Initial width (80 - 8), will be updated on window resize
+	textInput.SetValue("") // Ensure clean initialization
 
-	// Initialize glamour renderer with dark theme
+	// Initialize glamour renderer with dark theme (simplified for faster startup)
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle("dark"),
 		glamour.WithWordWrap(80),
 	)
 	if err != nil {
-		// Fallback to default renderer if initialization fails
+		// Fallback to minimal renderer if initialization fails
 		renderer, _ = glamour.NewTermRenderer()
 	}
 
+	// Initialize viewport with default dimensions
+	viewport := viewport.New(80, 20)
+	viewport.YPosition = 3
+
 	model := tuiModel{
+		viewport:        viewport,
 		textInput:       textInput,
 		spinner:         s,
 		renderer:        renderer,
@@ -119,7 +125,9 @@ func NewTUIFrontend(interactive bool) *TUIFrontend {
 		waitingForInput: false,
 		processingTool:  false,
 		messages:        []string{},
-		ready:           false,
+		ready:           true, // Start ready with default dimensions
+		width:           80,
+		height:          24,
 	}
 
 	tui := &TUIFrontend{
@@ -152,6 +160,7 @@ func (m tuiModel) Init() tea.Cmd {
 		m.spinner.Tick,
 		tea.EnterAltScreen,
 		func() tea.Msg {
+			// Send a window size message to trigger initialization
 			return tea.WindowSizeMsg{Width: 80, Height: 24}
 		},
 	)
@@ -167,28 +176,23 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		
-		// Update viewport
-		headerHeight := 3
+		// Update viewport dimensions
 		footerHeight := 4
-		verticalMarginHeight := headerHeight + footerHeight
+		verticalMarginHeight := footerHeight
 		
-		if !m.ready {
-			m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
-			m.viewport.YPosition = headerHeight
-			m.ready = true
-		} else {
-			m.viewport.Width = msg.Width
-			m.viewport.Height = msg.Height - verticalMarginHeight
+		m.viewport.Width = msg.Width
+		m.viewport.Height = msg.Height - verticalMarginHeight
+		
+		// Update text input width accounting for border (2) + padding (2)
+		// Leave some margin for proper display
+		if msg.Width > 8 {
+			m.textInput.Width = msg.Width - 8
 		}
 		
-		// Update text input width
-		m.textInput.Width = msg.Width - 4
-		
-		// Update glamour renderer width
-		if m.renderer != nil {
-			// Create a new renderer with updated width
+		// Update glamour renderer width only if it's significantly different to avoid unnecessary recreations
+		if m.renderer != nil && msg.Width > 20 {
 			newRenderer, err := glamour.NewTermRenderer(
-				glamour.WithAutoStyle(),
+				glamour.WithStandardStyle("dark"),
 				glamour.WithWordWrap(msg.Width-10), // Leave some margin
 			)
 			if err == nil {
@@ -241,6 +245,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case inputRequestMsg:
 		m.waitingForInput = true
+		m.textInput.SetValue("") // Clear any residual content
 		m.textInput.Focus()
 
 	case spinner.TickMsg:
@@ -256,20 +261,14 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the TUI
 func (m tuiModel) View() string {
-	if !m.ready {
-		return "\n  Initializing..."
-	}
-
-	// Header
-	title := titleStyle.Render("Tiny Trae - AI Agent")
-	header := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, title)
-
 	// Footer
 	var footer string
 	if m.processingTool {
 		footer = fmt.Sprintf(" %s Processing tool: %s", m.spinner.View(), m.currentToolName)
 	} else if m.waitingForInput {
-		footer = inputStyle.Render(m.textInput.View())
+		// Render input box centered with proper width
+		inputBox := inputStyle.Render(m.textInput.View())
+		footer = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, inputBox)
 	} else if m.interactive {
 		footer = systemStyle.Render(" Press 'q' or Ctrl+C to quit")
 	} else {
@@ -279,8 +278,6 @@ func (m tuiModel) View() string {
 	// Main view
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		header,
-		"",
 		m.viewport.View(),
 		"",
 		footer,
