@@ -29,3 +29,6 @@ go.work
 
 # Compiled binary
 tiny-trae
+
+# Claude trace logs
+.claude-trace/

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"os/signal"
 
 	"tiny-trae/internal/agent"
+	"tiny-trae/internal/frontend"
 	"tiny-trae/internal/profile"
 
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -16,7 +16,7 @@ import (
 
 // main is the entry point of the application.
 // It initializes the Anthropic client, sets up the available tools,
-// creates a new agent, and starts its execution.
+// creates a new agent with a console frontend, and starts its execution.
 // It supports both interactive and non-interactive modes.
 // Any errors that occur during the agent's run are printed to the console.
 func main() {
@@ -49,24 +49,16 @@ func main() {
 	}
 	client := agent.NewClientWithOptions(options...)
 
-	var getUserMessage func() (string, bool)
+	// Determine if running in interactive mode
+	interactive := *promptFlag == ""
 	var initialMessage string
-
 	if *promptFlag != "" {
 		initialMessage = *promptFlag
-		getUserMessage = func() (string, bool) {
-			return "", false
-		}
-	} else {
-		scanner := bufio.NewScanner(os.Stdin)
-		getUserMessage = func() (string, bool) {
-			fmt.Print("You: ")
-			if !scanner.Scan() {
-				return "", false
-			}
-			return scanner.Text(), true
-		}
 	}
+
+	// Create console frontend
+	consoleFrontend := frontend.NewConsoleFrontend(interactive)
+	defer consoleFrontend.Close()
 
 	// Select profile based on command line flag
 	agentProfile := profile.GetProfileByName(*profileFlag)
@@ -76,9 +68,19 @@ func main() {
 	}
 
 	fmt.Printf("Using profile: %s\n", agentProfile.Name)
-	agentInstance := agent.NewAgent(client, getUserMessage, agentProfile, *promptFlag == "")
+
+	// Create agent with the console frontend
+	agentInstance := agent.NewAgent(client, agentProfile, consoleFrontend)
+
+	// Run the agent
 	err := agentInstance.Run(context.TODO(), initialMessage)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
+		consoleFrontend.SendMessage(agent.Message{
+			Type:    agent.MessageTypeError,
+			Content: err.Error(),
+		})
+		// Ensure error is visible before exit
+		fmt.Fprintf(os.Stderr, "Agent error: %v\n", err)
+		os.Exit(1)
 	}
 }
