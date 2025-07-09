@@ -32,6 +32,7 @@ func main() {
 	promptFlag := flag.String("p", "", "Accept a string as user input")
 	listProfilesFlag := flag.Bool("list-profiles", false, "List all available profiles")
 	profileFlag := flag.String("profile", "default", "Specify which profile to use (default, coding, minimal)")
+	consoleFlag := flag.Bool("console", false, "Use console frontend (default is TUI)")
 	flag.Parse()
 
 	// Handle list profiles flag
@@ -56,9 +57,14 @@ func main() {
 		initialMessage = *promptFlag
 	}
 
-	// Create console frontend
-	consoleFrontend := frontend.NewConsoleFrontend(interactive)
-	defer consoleFrontend.Close()
+	// Create frontend based on flags (TUI is default)
+	var agentFrontend agent.Frontend
+	if *consoleFlag {
+		agentFrontend = frontend.NewConsoleFrontend(interactive)
+	} else {
+		agentFrontend = frontend.NewTUIFrontend(interactive)
+	}
+	defer agentFrontend.Close()
 
 	// Select profile based on command line flag
 	agentProfile := profile.GetProfileByName(*profileFlag)
@@ -69,13 +75,13 @@ func main() {
 
 	fmt.Printf("Using profile: %s\n", agentProfile.Name)
 
-	// Create agent with the console frontend
-	agentInstance := agent.NewAgent(client, agentProfile, consoleFrontend)
+	// Create agent with the selected frontend
+	agentInstance := agent.NewAgent(client, agentProfile, agentFrontend)
 
 	// Run the agent
 	err := agentInstance.Run(context.TODO(), initialMessage)
 	if err != nil {
-		consoleFrontend.SendMessage(agent.Message{
+		agentFrontend.SendMessage(agent.Message{
 			Type:    agent.MessageTypeError,
 			Content: err.Error(),
 		})
