@@ -20,14 +20,6 @@ import (
 // It supports both interactive and non-interactive modes.
 // Any errors that occur during the agent's run are printed to the console.
 func main() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		fmt.Println()
-		os.Exit(0)
-	}()
-
 	// Define command line flags
 	promptFlag := flag.String("p", "", "Accept a string as user input")
 	listProfilesFlag := flag.Bool("list-profiles", false, "List all available profiles")
@@ -61,8 +53,17 @@ func main() {
 	var agentFrontend agent.Frontend
 	if *consoleFlag {
 		agentFrontend = frontend.NewConsoleFrontend(interactive)
+		// Console frontend needs signal handling
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			<-c
+			fmt.Println()
+			os.Exit(0)
+		}()
 	} else {
 		agentFrontend = frontend.NewTUIFrontend(interactive)
+		// TUI frontend handles Ctrl+C internally, no signal handler needed
 	}
 	defer agentFrontend.Close()
 
