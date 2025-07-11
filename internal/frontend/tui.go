@@ -39,6 +39,7 @@ type tuiModel struct {
 	messageCh        chan agent.Message
 	interactive      bool
 	waitingForInput  bool
+	waitingForResponse bool
 	processingTool   bool
 	currentToolName  string
 	ready            bool
@@ -123,6 +124,7 @@ func NewTUIFrontend(interactive bool) *TUIFrontend {
 		messageCh:       messageCh,
 		interactive:     interactive,
 		waitingForInput: false,
+		waitingForResponse: false,
 		processingTool:  false,
 		messages:        []string{},
 		ready:           true, // Start ready with default dimensions
@@ -157,7 +159,6 @@ func (t *TUIFrontend) run() {
 // Init initializes the TUI model
 func (m tuiModel) Init() tea.Cmd {
 	return tea.Batch(
-		m.spinner.Tick,
 		tea.EnterAltScreen,
 		func() tea.Msg {
 			// Send a window size message to trigger initialization
@@ -208,16 +209,20 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.waitingForInput {
+		if m.waitingForInput && !m.waitingForResponse && !m.processingTool {
 			switch msg.String() {
 			case "enter":
 				input := m.textInput.Value()
 				if input != "" {
 					m.inputCh <- input
 					m.textInput.SetValue("")
+					m.textInput.Blur()
 					m.waitingForInput = false
+					m.waitingForResponse = true
+					// Start spinner for response waiting
+					cmds = append(cmds, m.spinner.Tick)
 				}
-				return m, nil
+				return m, tea.Batch(cmds...)
 			case "ctrl+c":
 				return m, tea.Quit
 			}
@@ -238,19 +243,31 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := json.Unmarshal(msg.msg.Data, &toolData); err == nil {
 				m.currentToolName = toolData.ToolName
 			}
+			// Start spinner for tool processing
+			cmds = append(cmds, m.spinner.Tick)
 		} else if msg.msg.Type == agent.MessageTypeToolResult {
 			m.processingTool = false
 			m.currentToolName = ""
+		} else if msg.msg.Type == agent.MessageTypeAssistant {
+			// Assistant response received, no longer waiting
+			m.waitingForResponse = false
+			// Allow free typing again
+			m.waitingForInput = true
+			m.textInput.Focus()
 		}
 
 	case inputRequestMsg:
 		m.waitingForInput = true
+		m.waitingForResponse = false
 		m.textInput.SetValue("") // Clear any residual content
 		m.textInput.Focus()
 
 	case spinner.TickMsg:
 		m.spinner, cmd = m.spinner.Update(msg)
-		cmds = append(cmds, cmd)
+		// Only continue ticking if we're actively waiting/processing
+		if m.waitingForResponse || m.processingTool {
+			cmds = append(cmds, cmd)
+		}
 	}
 
 	// Update viewport
@@ -263,23 +280,43 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m tuiModel) View() string {
 	// Footer
 	var footer string
+	var statusLine string
+	
 	if m.processingTool {
-		footer = fmt.Sprintf(" %s Processing tool: %s", m.spinner.View(), m.currentToolName)
-	} else if m.waitingForInput {
-		// Render input box centered with proper width
+		statusLine = fmt.Sprintf(" %s Processing tool: %s", m.spinner.View(), m.currentToolName)
+	} else if m.waitingForResponse {
+		statusLine = fmt.Sprintf(" %s Waiting for response...", m.spinner.View())
+	} else if m.interactive {
+		statusLine = systemStyle.Render(" Press 'q' or Ctrl+C to quit")
+	} else {
+		statusLine = systemStyle.Render(" Press 'q' or Ctrl+C to quit")
+	}
+
+	// Always show input box, but disable it when waiting for response or processing
+	if m.waitingForResponse || m.processingTool {
+		// Show disabled input box with muted style
+		disabledStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Foreground(lipgloss.Color("240")).
+			Padding(0, 1)
+		
+		// Create a copy of the input to show disabled state
+		disabledInput := m.textInput
+		disabledInput.Blur()
+		inputBox := disabledStyle.Render(disabledInput.View())
+		footer = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, inputBox)
+	} else {
+		// Show normal input box
 		inputBox := inputStyle.Render(m.textInput.View())
 		footer = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, inputBox)
-	} else if m.interactive {
-		footer = systemStyle.Render(" Press 'q' or Ctrl+C to quit")
-	} else {
-		footer = systemStyle.Render(" Press 'q' or Ctrl+C to quit")
 	}
 
 	// Main view
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.viewport.View(),
-		"",
+		statusLine,
 		footer,
 	)
 }
