@@ -49,21 +49,21 @@ func main() {
 		initialMessage = *promptFlag
 	}
 
+	// Set up signal handler to ensure Ctrl+C always works
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		fmt.Println()
+		os.Exit(0)
+	}()
+
 	// Create frontend based on flags (TUI is default)
 	var agentFrontend agent.Frontend
 	if *consoleFlag {
 		agentFrontend = frontend.NewConsoleFrontend(interactive)
-		// Console frontend needs signal handling
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		go func() {
-			<-c
-			fmt.Println()
-			os.Exit(0)
-		}()
 	} else {
 		agentFrontend = frontend.NewTUIFrontend(interactive)
-		// TUI frontend handles Ctrl+C internally, no signal handler needed
 	}
 	defer agentFrontend.Close()
 

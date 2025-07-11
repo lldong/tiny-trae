@@ -3,6 +3,7 @@ package frontend
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -204,7 +205,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if !m.interactive {
 			switch msg.String() {
-			case "ctrl+c", "q":
+			case "ctrl+c":
+				os.Exit(0)
+			case "q":
 				return m, tea.Quit
 			}
 		}
@@ -224,13 +227,15 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, tea.Batch(cmds...)
 			case "ctrl+c":
-				return m, tea.Quit
+				os.Exit(0)
 			}
 			m.textInput, cmd = m.textInput.Update(msg)
 			cmds = append(cmds, cmd)
 		} else {
 			switch msg.String() {
-			case "ctrl+c", "q":
+			case "ctrl+c":
+				os.Exit(0)
+			case "q":
 				return m, tea.Quit
 			}
 		}
@@ -421,6 +426,13 @@ func (t *TUIFrontend) IsInteractive() bool {
 func (t *TUIFrontend) Close() {
 	if t.interactive && t.program != nil {
 		t.program.Quit()
-		<-t.done
+		// Don't wait for done channel if we're already done
+		select {
+		case <-t.done:
+			// Program has exited
+		default:
+			// Program is still running, wait for it to finish
+			<-t.done
+		}
 	}
 }
