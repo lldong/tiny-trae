@@ -1,5 +1,24 @@
 # Tiny Trae
 
+A minimal AI coding agent powered by Anthropic's Claude with a modular frontend architecture.
+
+## Architecture
+
+Tiny Trae has been designed with a clean separation between the core agent logic and the frontend interface. This allows for easy extension with different types of user interfaces.
+
+### Core Components
+
+- **Agent Core**: Handles AI conversation logic and tool execution in a separate goroutine
+- **Frontend Interface**: Defines how different UIs can interact with the agent
+- **Message System**: Structured communication between core and frontend
+- **Console Frontend**: Default command-line interface implementation
+
+### Supported Frontends
+
+- **Console**: Command-line interface (default)
+
+For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 This project is a simple AI coding agent implemented in Go. It uses the Anthropic API to interact with a large language model (Claude) to help with software engineering tasks. The agent can execute a predefined set of tools based on the model's response.
 
 ## Features

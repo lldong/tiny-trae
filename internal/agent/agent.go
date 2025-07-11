@@ -29,24 +29,21 @@ type Profile struct {
 
 // Agent struct represents the core of the AI agent.
 type Agent struct {
-	client         anthropic.Client
-	getUserMessage func() (string, bool)
-	profile        *Profile
-	interactive    bool
+	client   anthropic.Client
+	profile  *Profile
+	frontend Frontend
 }
 
-// NewAgent creates a new Agent instance with a profile.
+// NewAgent creates a new Agent instance with a profile and frontend.
 func NewAgent(
 	client anthropic.Client,
-	getUserMessage func() (string, bool),
 	profile *Profile,
-	interactive bool,
+	frontend Frontend,
 ) *Agent {
 	return &Agent{
-		client:         client,
-		getUserMessage: getUserMessage,
-		profile:        profile,
-		interactive:    interactive,
+		client:   client,
+		profile:  profile,
+		frontend: frontend,
 	}
 }
 
@@ -54,10 +51,9 @@ func NewAgent(
 // Deprecated: Use NewAgent with a Profile instead.
 func NewAgentWithDefaults(
 	client anthropic.Client,
-	getUserMessage func() (string, bool),
 	tools []ToolDefinition,
-	interactive bool,
 	systemPrompt string,
+	frontend Frontend,
 ) *Agent {
 	profile := &Profile{
 		Name:         "legacy",
@@ -66,7 +62,7 @@ func NewAgentWithDefaults(
 		Tools:        tools,
 		SystemPrompt: systemPrompt,
 	}
-	return NewAgent(client, getUserMessage, profile, interactive)
+	return NewAgent(client, profile, frontend)
 }
 
 // NewClientWithOptions creates a new Anthropic client with the given options.
@@ -74,56 +70,92 @@ func NewClientWithOptions(options ...option.RequestOption) anthropic.Client {
 	return anthropic.NewClient(options...)
 }
 
-// Run starts the agent's main loop.
-// It continuously prompts the user for input, sends it to the Anthropic API,
-// and processes the model's response, which may include text or tool use requests.
-// The loop terminates when the user signals the end of input (e.g., by pressing CTRL+C).
-// In non-interactive mode, it takes an initial message, gets the model's response, and exits.
+// Run starts the agent's main loop in a separate goroutine.
+// It continuously processes user input and model responses, communicating with the frontend
+// through the Frontend interface. The core logic runs independently from the UI.
 func (a *Agent) Run(ctx context.Context, initialMessage string) error {
+	// Send initial system message
+	if initialMessage == "" {
+		a.frontend.SendMessage(Message{
+			Type:    MessageTypeSystemInfo,
+			Content: "Chat with Tiny Trae (use CTRL+C to exit)",
+		})
+	}
+
+	// Start the core agent loop in a goroutine
+	errorChan := make(chan error, 1)
+	go func() {
+		errorChan <- a.runCore(ctx, initialMessage)
+	}()
+
+	// Wait for completion or error
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errorChan:
+		return err
+	}
+}
+
+// runCore contains the main agent logic that runs in a separate goroutine
+func (a *Agent) runCore(ctx context.Context, initialMessage string) error {
 	conversation := []anthropic.MessageParam{}
 
 	if initialMessage != "" {
 		userMessage := anthropic.NewUserMessage(anthropic.NewTextBlock(initialMessage))
 		conversation = append(conversation, userMessage)
-	} else {
-		fmt.Printf("Chat with Tiny Trae (use CTRL+C to exit)\n")
+		// Send user input message to frontend
+		a.frontend.SendMessage(Message{
+			Type:    MessageTypeUserInput,
+			Content: initialMessage,
+		})
 	}
 
 	readUserInput := initialMessage == ""
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		if readUserInput {
-			userInput, ok := a.getUserMessage()
+			userInput, ok := a.frontend.GetUserInput()
 			if !ok {
 				break
 			}
 
 			userMessage := anthropic.NewUserMessage(anthropic.NewTextBlock(userInput))
 			conversation = append(conversation, userMessage)
+
+			// Send user input message to frontend
+			a.frontend.SendMessage(Message{
+				Type:    MessageTypeUserInput,
+				Content: userInput,
+			})
 		}
 
 		message, err := a.runInference(ctx, conversation)
 		if err != nil {
+			a.frontend.SendMessage(Message{
+				Type:    MessageTypeError,
+				Content: err.Error(),
+			})
 			return err
 		}
 		conversation = append(conversation, message.ToParam())
 
-		hasToolUse := false
-		for _, content := range message.Content {
-			if content.Type == "tool_use" {
-				hasToolUse = true
-				break
-			}
-		}
 
 		toolResults := []anthropic.ContentBlockParamUnion{}
 		for _, content := range message.Content {
 			switch content.Type {
 			case "text":
-				if a.interactive {
-					fmt.Printf("Trae: %s\n", content.Text)
-				} else if !hasToolUse {
-					fmt.Printf("%s\n", content.Text)
-				}
+				// Send assistant message to frontend
+				// Always show assistant messages to ensure tool feedback is displayed
+				a.frontend.SendMessage(Message{
+					Type:    MessageTypeAssistant,
+					Content: content.Text,
+				})
 			case "tool_use":
 				result := a.executeTool(content.ID, content.Name, content.Input)
 				toolResults = append(toolResults, result)
@@ -131,15 +163,24 @@ func (a *Agent) Run(ctx context.Context, initialMessage string) error {
 		}
 
 		if len(toolResults) == 0 {
-			if !a.interactive {
+			// If no tools were used, check if we should continue reading input based on interactive mode
+			if a.frontend.IsInteractive() {
+				// In interactive mode, continue to read user input
+				readUserInput = true
+				continue
+			} else {
+				// In non-interactive mode, exit after processing the message
 				return nil
 			}
-			readUserInput = true
-			continue
 		}
 
-		readUserInput = false
+		// After tool execution, add tool results to conversation and continue inference
 		conversation = append(conversation, anthropic.NewUserMessage(toolResults...))
+		
+		// Continue the inference loop to get model's response to tool results
+		// Don't read user input in the next iteration, let the model respond to tool results first
+		readUserInput = false
+		continue
 	}
 
 	return nil
@@ -186,14 +227,80 @@ func (a *Agent) executeTool(id, name string, input json.RawMessage) anthropic.Co
 		}
 	}
 	if !found {
+		// Send tool result message to frontend
+		toolResultData := ToolResultData{
+			ToolName: name,
+			ToolID:   id,
+			Result:   "tool not found",
+			IsError:  true,
+		}
+		data, err := json.Marshal(toolResultData)
+		if err != nil {
+			// Fallback to sending message without data if marshaling fails
+			a.frontend.SendMessage(Message{
+				Type:    MessageTypeToolResult,
+				Content: "tool not found",
+			})
+		} else {
+			a.frontend.SendMessage(Message{
+				Type:    MessageTypeToolResult,
+				Content: "",
+				Data:    data,
+			})
+		}
 		return anthropic.NewToolResultBlock(id, "tool not found", true)
 	}
 
-	if a.interactive {
-		fmt.Printf("Tool: %s(%s)\n", name, input)
+	// Send tool call message to frontend
+	toolCallData := ToolCallData{
+		ToolName: name,
+		ToolID:   id,
+		Input:    input,
+	}
+	data, err := json.Marshal(toolCallData)
+	if err != nil {
+		// Fallback to sending message without data if marshaling fails
+		a.frontend.SendMessage(Message{
+			Type:    MessageTypeToolCall,
+			Content: fmt.Sprintf("Executing tool: %s", name),
+		})
+	} else {
+		a.frontend.SendMessage(Message{
+			Type:    MessageTypeToolCall,
+			Content: fmt.Sprintf("Executing tool: %s", name),
+			Data:    data,
+		})
 	}
 
 	response, err := toolDef.Function(input)
+	isError := err != nil
+	result := response
+	if err != nil {
+		result = err.Error()
+	}
+
+	// Send tool result message to frontend
+	toolResultData := ToolResultData{
+		ToolName: name,
+		ToolID:   id,
+		Result:   result,
+		IsError:  isError,
+	}
+	data, err = json.Marshal(toolResultData)
+	if err != nil {
+		// Fallback to sending message without data if marshaling fails
+		a.frontend.SendMessage(Message{
+			Type:    MessageTypeToolResult,
+			Content: result,
+		})
+	} else {
+		a.frontend.SendMessage(Message{
+			Type:    MessageTypeToolResult,
+			Content: result,
+			Data:    data,
+		})
+	}
+
 	if err != nil {
 		return anthropic.NewToolResultBlock(id, err.Error(), true)
 	}
