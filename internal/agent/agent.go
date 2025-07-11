@@ -139,9 +139,17 @@ func (a *Agent) runCore(ctx context.Context, initialMessage string) error {
 		if err != nil {
 			a.frontend.SendMessage(Message{
 				Type:    MessageTypeError,
-				Content: err.Error(),
+				Content: fmt.Sprintf("LLM request failed: %v", err),
 			})
-			return err
+			
+			// In interactive mode, continue the loop to allow user to try again
+			if a.frontend.IsInteractive() {
+				readUserInput = true
+				continue
+			} else {
+				// In non-interactive mode, return error to exit
+				return err
+			}
 		}
 		conversation = append(conversation, message.ToParam())
 

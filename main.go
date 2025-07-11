@@ -81,11 +81,8 @@ func main() {
 	// Run the agent
 	err := agentInstance.Run(context.TODO(), initialMessage)
 	if err != nil {
-		agentFrontend.SendMessage(agent.Message{
-			Type:    agent.MessageTypeError,
-			Content: err.Error(),
-		})
-		// Ensure error is visible before exit
+		// This should only happen in non-interactive mode now
+		// since interactive mode handles errors internally
 		fmt.Fprintf(os.Stderr, "Agent error: %v\n", err)
 		os.Exit(1)
 	}
