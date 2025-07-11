@@ -74,7 +74,7 @@ var (
 
 	errorStyle = lipgloss.NewStyle().
 	Bold(true).
-	Foreground(lipgloss.Color("red"))
+	Foreground(lipgloss.Color("196"))
 
 	systemStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("240"))
@@ -352,7 +352,7 @@ func (m *tuiModel) addMessage(msg agent.Message) {
 		var toolResult agent.ToolResultData
 		if err := json.Unmarshal(msg.Data, &toolResult); err == nil {
 			if toolResult.IsError {
-				formattedMsg = fmt.Sprintf("[%s] %s %s: %s", timestamp, errorStyle.Render("Error"), toolResult.ToolName, toolResult.Result)
+				formattedMsg = fmt.Sprintf("[%s] %s %s: %s", timestamp, errorStyle.Render("Error"), errorStyle.Render(toolResult.ToolName), errorStyle.Render(toolResult.Result))
 			} else {
 				// Truncate long results
 				result := toolResult.Result
@@ -365,7 +365,7 @@ func (m *tuiModel) addMessage(msg agent.Message) {
 			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Result:"), msg.Content)
 		}
 	case agent.MessageTypeError:
-		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, errorStyle.Render("Error:"), msg.Content)
+		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, errorStyle.Render("Error:"), errorStyle.Render(msg.Content))
 	case agent.MessageTypeSystemInfo:
 		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, systemStyle.Render("System:"), msg.Content)
 	default:
