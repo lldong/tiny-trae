@@ -385,7 +385,7 @@ func (t *TUIFrontend) SendMessage(msg agent.Message) {
 	if t.interactive && t.program != nil {
 		t.program.Send(messageReceivedMsg{msg: msg})
 	} else {
-		// Fallback to console output for non-interactive mode
+		// Fallback to stdout for non-interactive mode
 		switch msg.Type {
 		case agent.MessageTypeAssistant:
 			fmt.Printf("Trae: %s\n", msg.Content)

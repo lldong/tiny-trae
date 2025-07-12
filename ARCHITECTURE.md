@@ -24,8 +24,8 @@ Tiny Trae has been refactored to separate the core agent logic from the frontend
 
 ### Current Frontend Implementation
 
-4. **Console Frontend** (`internal/frontend/console.go`)
-   - Implements the `Frontend` interface for console-based interaction
+4. **TUI Frontend** (`internal/frontend/tui.go`)
+- Implements the `Frontend` interface for terminal user interface interaction using bubbletea
    - Handles user input from stdin and displays messages to stdout
    - Supports both interactive and non-interactive modes
 
@@ -77,7 +77,7 @@ To add a new frontend (e.g., web interface, GUI, API server), follow these steps
 
 3. **Update main.go** to use your new frontend:
    ```go
-   // Replace the console frontend creation with your frontend
+   // Replace the TUI frontend creation with your frontend
    yourFrontend := frontend.NewYourFrontend(/* your parameters */)
    defer yourFrontend.Close()
    

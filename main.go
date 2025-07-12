@@ -16,15 +16,14 @@ import (
 
 // main is the entry point of the application.
 // It initializes the Anthropic client, sets up the available tools,
-// creates a new agent with a console frontend, and starts its execution.
+// creates a new agent with a TUI frontend, and starts its execution.
 // It supports both interactive and non-interactive modes.
-// Any errors that occur during the agent's run are printed to the console.
+// Any errors that occur during the agent's run are displayed in the TUI.
 func main() {
 	// Define command line flags
 	promptFlag := flag.String("p", "", "Accept a string as user input")
 	listProfilesFlag := flag.Bool("list-profiles", false, "List all available profiles")
 	profileFlag := flag.String("profile", "default", "Specify which profile to use (default, coding, minimal)")
-	consoleFlag := flag.Bool("console", false, "Use console frontend (default is TUI)")
 	flag.Parse()
 
 	// Handle list profiles flag
@@ -58,13 +57,8 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Create frontend based on flags (TUI is default)
-	var agentFrontend agent.Frontend
-	if *consoleFlag {
-		agentFrontend = frontend.NewConsoleFrontend(interactive)
-	} else {
-		agentFrontend = frontend.NewTUIFrontend(interactive)
-	}
+	// Create TUI frontend
+	agentFrontend := frontend.NewTUIFrontend(interactive)
 	defer agentFrontend.Close()
 
 	// Select profile based on command line flag

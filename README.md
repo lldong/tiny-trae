@@ -11,11 +11,11 @@ Tiny Trae has been designed with a clean separation between the core agent logic
 - **Agent Core**: Handles AI conversation logic and tool execution in a separate goroutine
 - **Frontend Interface**: Defines how different UIs can interact with the agent
 - **Message System**: Structured communication between core and frontend
-- **Console Frontend**: Default command-line interface implementation
+- **TUI Frontend**: Terminal user interface implementation using bubbletea
 
-### Supported Frontends
+### Frontend
 
-- **Console**: Command-line interface (default)
+- **TUI**: Terminal user interface with rich interface using bubbletea
 
 For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
