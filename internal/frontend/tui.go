@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"tiny-trae/internal/agent"
 
@@ -57,33 +58,33 @@ type inputRequestMsg struct{}
 // Define styles
 var (
 	titleStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("magenta")).
-	MarginLeft(1)
+		Bold(true).
+		Foreground(lipgloss.Color("magenta")).
+		MarginLeft(1)
 
 	userStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("green"))
+		Bold(true).
+		Foreground(lipgloss.Color("green"))
 
 	assistantStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("cyan"))
+		Bold(true).
+		Foreground(lipgloss.Color("cyan"))
 
 	toolStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("yellow"))
+		Bold(true).
+		Foreground(lipgloss.Color("yellow"))
 
 	errorStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("196"))
+		Bold(true).
+		Foreground(lipgloss.Color("196"))
 
 	systemStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("240"))
+		Foreground(lipgloss.Color("240"))
 
 	inputStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("blue")).
-	Padding(0, 1)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("blue")).
+		Padding(0, 1)
 )
 
 // NewTUIFrontend creates a new TUI frontend
@@ -326,20 +327,67 @@ func (m tuiModel) View() string {
 	)
 }
 
+// wrapText wraps text to fit within the specified width
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return text
+	}
+	
+	var lines []string
+	var currentLine strings.Builder
+	
+	for _, word := range words {
+		wordLen := utf8.RuneCountInString(word)
+		lineLen := utf8.RuneCountInString(currentLine.String())
+		
+		// If adding this word would exceed the width, start a new line
+		if lineLen+wordLen+1 > width && lineLen > 0 {
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
+		} else {
+			if currentLine.Len() > 0 {
+				currentLine.WriteString(" ")
+			}
+			currentLine.WriteString(word)
+		}
+	}
+	
+	// Add the last line
+	if currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
+	}
+	
+	return strings.Join(lines, "\n")
+}
+
 // addMessage adds a message to the display
 func (m *tuiModel) addMessage(msg agent.Message) {
 	var formattedMsg string
 	timestamp := time.Now().Format("15:04:05")
+	
+	// Calculate available width for content (account for timestamp, labels, and margins)
+	availableWidth := m.width - 12
+	if availableWidth < 20 {
+		availableWidth = 20
+	}
 
 	switch msg.Type {
 	case agent.MessageTypeUserInput:
-		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, userStyle.Render("You:"), msg.Content)
+		content := wrapText(msg.Content, availableWidth-6) // Account for prefix
+		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, userStyle.Render("You:"), content)
 	case agent.MessageTypeAssistant:
 		// Use glamour to render markdown content from the assistant
 		renderedContent, err := m.renderer.Render(msg.Content)
 		if err != nil {
-			// Fallback to plain text if rendering fails
-			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, assistantStyle.Render("Trae:"), msg.Content)
+			// Fallback to plain text with wrapping if rendering fails
+			content := wrapText(msg.Content, availableWidth-6)
+			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, assistantStyle.Render("Trae:"), content)
 		} else {
 			// Clean up the rendered content (remove trailing newlines)
 			renderedContent = strings.TrimRight(renderedContent, "\n\r")
@@ -349,32 +397,42 @@ func (m *tuiModel) addMessage(msg agent.Message) {
 	case agent.MessageTypeToolCall:
 		var toolData agent.ToolCallData
 		if err := json.Unmarshal(msg.Data, &toolData); err == nil {
-			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Tool:"), fmt.Sprintf("Executing %s", toolData.ToolName))
+			content := wrapText(fmt.Sprintf("Executing %s", toolData.ToolName), availableWidth-6)
+			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Tool:"), content)
 		} else {
-			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Tool:"), msg.Content)
+			content := wrapText(msg.Content, availableWidth-6)
+			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Tool:"), content)
 		}
 	case agent.MessageTypeToolResult:
 		var toolResult agent.ToolResultData
 		if err := json.Unmarshal(msg.Data, &toolResult); err == nil {
 			if toolResult.IsError {
-				formattedMsg = fmt.Sprintf("[%s] %s %s: %s", timestamp, errorStyle.Render("Error"), errorStyle.Render(toolResult.ToolName), errorStyle.Render(toolResult.Result))
+				errorText := fmt.Sprintf("%s: %s", toolResult.ToolName, toolResult.Result)
+				wrappedError := wrapText(errorText, availableWidth-8)
+				formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, errorStyle.Render("Error"), errorStyle.Render(wrappedError))
 			} else {
 				// Truncate long results
 				result := toolResult.Result
 				if len(result) > 200 {
 					result = result[:200] + "..."
 				}
-				formattedMsg = fmt.Sprintf("[%s] %s %s: %s", timestamp, toolStyle.Render("Result"), toolResult.ToolName, result)
+				content := wrapText(fmt.Sprintf("%s: %s", toolResult.ToolName, result), availableWidth-8)
+				formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Result"), content)
 			}
 		} else {
-			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Result:"), msg.Content)
+			content := wrapText(msg.Content, availableWidth-6)
+			formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, toolStyle.Render("Result:"), content)
 		}
 	case agent.MessageTypeError:
-		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, errorStyle.Render("Error:"), errorStyle.Render(msg.Content))
+		// Wrap error messages to prevent overflow
+		wrappedError := wrapText(msg.Content, availableWidth-8)
+		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, errorStyle.Render("Error:"), errorStyle.Render(wrappedError))
 	case agent.MessageTypeSystemInfo:
-		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, systemStyle.Render("System:"), msg.Content)
+		content := wrapText(msg.Content, availableWidth-8)
+		formattedMsg = fmt.Sprintf("[%s] %s %s", timestamp, systemStyle.Render("System:"), content)
 	default:
-		formattedMsg = fmt.Sprintf("[%s] %s", timestamp, msg.Content)
+		content := wrapText(msg.Content, availableWidth-4)
+		formattedMsg = fmt.Sprintf("[%s] %s", timestamp, content)
 	}
 
 	m.messages = append(m.messages, formattedMsg)
