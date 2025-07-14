@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny Trae - AI Coding Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            line-height: 1.6;
+            color: #e0e0e0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header {
+            padding: 2rem 0;
+            border-bottom: 1px solid #334155;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #00ff88;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .nav-links {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #94a3b8;
+            font-weight: 500;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: #00ff88;
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.5);
+        }
+
+        .hero {
+            padding: 5rem 0;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 136, 0.1) 0%, transparent 70%);
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #ffffff;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            position: relative;
+        }
+
+        .hero .subtitle {
+            font-size: 1.5rem;
+            color: #00ff88;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: #cbd5e1;
+            margin-bottom: 2.5rem;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            position: relative;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(45deg, #00ff88, #00d4ff);
+            color: #0f172a;
+            padding: 1rem 2rem;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.5);
+        }
+
+        .features {
+            padding: 5rem 0;
+            background: rgba(30, 41, 59, 0.5);
+            position: relative;
+        }
+
+        .features::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(0,255,136,0.1)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+            position: relative;
+        }
+
+        .feature {
+            padding: 2rem;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 12px;
+            border: 1px solid #334155;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .feature:hover {
+            border-color: #00ff88;
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.2);
+            transform: translateY(-4px);
+        }
+
+        .feature::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00ff88, #00d4ff);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .feature h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #00ff88;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .feature p {
+            color: #cbd5e1;
+            line-height: 1.7;
+        }
+
+        .code-example {
+            padding: 5rem 0;
+            text-align: center;
+        }
+
+        .code-example h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: #ffffff;
+            text-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+
+        .code-block {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 800px;
+            text-align: left;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #e2e8f0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .code-block::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+        }
+
+        .code-line {
+            display: block;
+            padding: 0.2rem 0;
+        }
+
+        .comment {
+            color: #64748b;
+        }
+
+        .command {
+            color: #00ff88;
+        }
+
+        .string {
+            color: #fbbf24;
+        }
+
+        .stats {
+            padding: 3rem 0;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .stat {
+            padding: 1.5rem;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff88;
+            display: block;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        footer {
+            padding: 3rem 0;
+            text-align: center;
+            border-top: 1px solid #334155;
+            color: #64748b;
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <div class="logo">$ tiny-trae</div>
+            <ul class="nav-links">
+                <li><a href="#features">features</a></li>
+                <li><a href="#docs">docs</a></li>
+                <li><a href="#github">github</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="subtitle">AI-Powered Development</div>
+                <h1>Tiny Trae</h1>
+                <p>A minimal AI coding agent powered by Anthropic's Claude with a modular frontend architecture. Built for developers, by developers. Streamline your workflow with intelligent automation and powerful tool execution.</p>
+                <a href="#start" class="cta-button">Initialize Agent</a>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <h2 style="text-align: center; font-size: 2.5rem; font-weight: 700; color: #ffffff; margin-bottom: 1rem; text-shadow: 0 0 15px rgba(0, 255, 136, 0.3);">Core Features</h2>
+                <div class="features-grid">
+                    <div class="feature">
+                        <h3>Interactive Shell</h3>
+                        <p>Direct terminal integration for real-time AI assistance. Chat with Claude directly from your development environment with full context awareness.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Tool Execution</h3>
+                        <p>Execute powerful development tools including file operations, ripgrep search, bash commands, and more. All seamlessly integrated with AI intelligence.</p>
+                    </div>
+                    <div class="feature">
+                        <h3>Modular Architecture</h3>
+                        <p>Clean separation between agent core and frontend interfaces. Easily extensible with custom tools and UI components for your specific workflow.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="code-example">
+            <div class="container">
+                <h2>Quick Start</h2>
+                <div class="code-block">
+<span class="code-line"><span class="comment"># Clone and setup</span></span>
+<span class="code-line"><span class="command">git clone</span> <span class="string">https://github.com/your-repo/tiny-trae</span></span>
+<span class="code-line"><span class="command">cd</span> tiny-trae</span>
+<span class="code-line"><span class="command">go mod tidy</span></span>
+<span class="code-line"></span>
+<span class="code-line"><span class="comment"># Configure API key</span></span>
+<span class="code-line"><span class="command">export</span> <span class="string">ANTHROPIC_API_KEY="your-api-key"</span></span>
+<span class="code-line"></span>
+<span class="code-line"><span class="comment"># Run interactive mode</span></span>
+<span class="code-line"><span class="command">go run main.go</span></span>
+<span class="code-line"></span>
+<span class="code-line"><span class="comment"># Or use CLI mode</span></span>
+<span class="code-line"><span class="command">./tiny-trae -p</span> <span class="string">"help me refactor this code"</span></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats">
+            <div class="container">
+                <h2 style="font-size: 2.5rem; font-weight: 700; color: #ffffff; margin-bottom: 1rem; text-shadow: 0 0 15px rgba(0, 255, 136, 0.3);">Built for Performance</h2>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <span class="stat-number">5+</span>
+                        <span class="stat-label">Built-in Tools</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">Go</span>
+                        <span class="stat-label">Language</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">Claude</span>
+                        <span class="stat-label">AI Model</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">MIT</span>
+                        <span class="stat-label">License</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Tiny Trae. Built with Go and Claude AI. | Open Source Developer Tools</p>
+        </div>
+    </footer>
+</body>
+</html>
