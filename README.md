@@ -2,6 +2,8 @@
 
 A minimal AI coding agent powered by Anthropic's Claude with a modular frontend architecture.
 
+🌐 **Landing Page**: https://lldong.github.io/tiny-trae
+
 ## Architecture
 
 Tiny Trae has been designed with a clean separation between the core agent logic and the frontend interface. This allows for easy extension with different types of user interfaces.
