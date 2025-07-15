@@ -30,21 +30,21 @@ type TUIFrontend struct {
 
 // tuiModel represents the state of the TUI
 type tuiModel struct {
-	viewport         viewport.Model
-	textInput        textinput.Model
-	spinner          spinner.Model
-	renderer         *glamour.TermRenderer
-	messages         []string
-	width            int
-	height           int
-	inputCh          chan string
-	messageCh        chan agent.Message
-	interactive      bool
-	waitingForInput  bool
+	viewport           viewport.Model
+	textInput          textinput.Model
+	spinner            spinner.Model
+	renderer           *glamour.TermRenderer
+	messages           []string
+	width              int
+	height             int
+	inputCh            chan string
+	messageCh          chan agent.Message
+	interactive        bool
+	waitingForInput    bool
 	waitingForResponse bool
-	processingTool   bool
-	currentToolName  string
-	ready            bool
+	processingTool     bool
+	currentToolName    string
+	ready              bool
 }
 
 // messageReceivedMsg is sent when a new message is received
@@ -58,33 +58,33 @@ type inputRequestMsg struct{}
 // Define styles
 var (
 	titleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("magenta")).
-		MarginLeft(1)
+			Bold(true).
+			Foreground(lipgloss.Color("magenta")).
+			MarginLeft(1)
 
 	userStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("green"))
+			Bold(true).
+			Foreground(lipgloss.Color("green"))
 
 	assistantStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("cyan"))
+			Bold(true).
+			Foreground(lipgloss.Color("cyan"))
 
 	toolStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("yellow"))
+			Bold(true).
+			Foreground(lipgloss.Color("yellow"))
 
 	errorStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("196"))
+			Bold(true).
+			Foreground(lipgloss.Color("196"))
 
 	systemStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240"))
+			Foreground(lipgloss.Color("240"))
 
 	inputStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("blue")).
-		Padding(0, 1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("blue")).
+			Padding(0, 1)
 )
 
 // NewTUIFrontend creates a new TUI frontend
@@ -100,7 +100,7 @@ func NewTUIFrontend(interactive bool) *TUIFrontend {
 	textInput := textinput.New()
 	textInput.Placeholder = "Type your message here..."
 	textInput.CharLimit = 1000
-	textInput.Width = 72 // Initial width (80 - 8), will be updated on window resize
+	textInput.Width = 72   // Initial width (80 - 8), will be updated on window resize
 	textInput.SetValue("") // Ensure clean initialization
 
 	// Initialize glamour renderer with dark theme (simplified for faster startup)
@@ -118,20 +118,20 @@ func NewTUIFrontend(interactive bool) *TUIFrontend {
 	viewport.YPosition = 3
 
 	model := tuiModel{
-		viewport:        viewport,
-		textInput:       textInput,
-		spinner:         s,
-		renderer:        renderer,
-		inputCh:         inputCh,
-		messageCh:       messageCh,
-		interactive:     interactive,
-		waitingForInput: false,
+		viewport:           viewport,
+		textInput:          textInput,
+		spinner:            s,
+		renderer:           renderer,
+		inputCh:            inputCh,
+		messageCh:          messageCh,
+		interactive:        interactive,
+		waitingForInput:    false,
 		waitingForResponse: false,
-		processingTool:  false,
-		messages:        []string{},
-		ready:           true, // Start ready with default dimensions
-		width:           80,
-		height:          24,
+		processingTool:     false,
+		messages:           []string{},
+		ready:              true, // Start ready with default dimensions
+		width:              80,
+		height:             24,
 	}
 
 	tui := &TUIFrontend{
@@ -178,20 +178,20 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		
+
 		// Update viewport dimensions
 		footerHeight := 4
 		verticalMarginHeight := footerHeight
-		
+
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height - verticalMarginHeight
-		
+
 		// Update text input width accounting for border (2) + padding (2)
 		// Leave some margin for proper display
 		if msg.Width > 8 {
 			m.textInput.Width = msg.Width - 8
 		}
-		
+
 		// Update glamour renderer width only if it's significantly different to avoid unnecessary recreations
 		if m.renderer != nil && msg.Width > 20 {
 			newRenderer, err := glamour.NewTermRenderer(
@@ -254,6 +254,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.msg.Type == agent.MessageTypeToolResult {
 			m.processingTool = false
 			m.currentToolName = ""
+			m.waitingForResponse = true
+			cmds = append(cmds, m.spinner.Tick)
 		} else if msg.msg.Type == agent.MessageTypeAssistant {
 			// Assistant response received, no longer waiting
 			m.waitingForResponse = false
@@ -287,7 +289,7 @@ func (m tuiModel) View() string {
 	// Footer
 	var footer string
 	var statusLine string
-	
+
 	if m.processingTool {
 		statusLine = fmt.Sprintf(" %s Processing tool: %s", m.spinner.View(), m.currentToolName)
 	} else if m.waitingForResponse {
@@ -306,7 +308,7 @@ func (m tuiModel) View() string {
 			BorderForeground(lipgloss.Color("240")).
 			Foreground(lipgloss.Color("240")).
 			Padding(0, 1)
-		
+
 		// Create a copy of the input to show disabled state
 		disabledInput := m.textInput
 		disabledInput.Blur()
@@ -332,19 +334,19 @@ func wrapText(text string, width int) string {
 	if width <= 0 {
 		return text
 	}
-	
+
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return text
 	}
-	
+
 	var lines []string
 	var currentLine strings.Builder
-	
+
 	for _, word := range words {
 		wordLen := utf8.RuneCountInString(word)
 		lineLen := utf8.RuneCountInString(currentLine.String())
-		
+
 		// If adding this word would exceed the width, start a new line
 		if lineLen+wordLen+1 > width && lineLen > 0 {
 			lines = append(lines, currentLine.String())
@@ -357,12 +359,12 @@ func wrapText(text string, width int) string {
 			currentLine.WriteString(word)
 		}
 	}
-	
+
 	// Add the last line
 	if currentLine.Len() > 0 {
 		lines = append(lines, currentLine.String())
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -370,7 +372,7 @@ func wrapText(text string, width int) string {
 func (m *tuiModel) addMessage(msg agent.Message) {
 	var formattedMsg string
 	timestamp := time.Now().Format("15:04:05")
-	
+
 	// Calculate available width for content (account for timestamp, labels, and margins)
 	availableWidth := m.width - 12
 	if availableWidth < 20 {
